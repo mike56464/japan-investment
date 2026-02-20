@@ -1,0 +1,29 @@
+name: Daily Fund Scraper
+
+on:
+  schedule:
+    # 這是 UTC 時間。07:00 UTC 等於台灣時間下午 15:00 (日本股市收盤後)
+    # 1-5 代表週一至週五執行
+    - cron: '0 7 * * 1-5'
+  workflow_dispatch: # 讓我們可以在 GitHub 網頁上手動點擊執行
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest # 使用 GitHub 提供的免費 Linux 虛擬機
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4 # 把你的程式碼從儲存庫抓到虛擬機裡
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12' # 使用跟你電腦一樣的 Python 3.12
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium # 安裝爬蟲必備的工具
+
+      - name: Run Scraper
+        run: python new.py # 執行你抓取 FA35 和 JA96 的程式碼
