@@ -11,46 +11,29 @@ except Exception:
 import re
 import time
 import json
-import sys
 import datetime
 import requests
 from google import genai
 from google.genai import types
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 # ==========================================
-# ⚙️ 設定區 (Linux VM 專用)
+# ⚙️ 設定區
 # ==========================================
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1474664376186179706/MtIa8U1EJS6tBydicPkLEiPgJa53PzBJ-PVeUvEkWDKheAuS0fKyFp_blzSR6dM524Ls"
-
-# ⚠️ Linux VM 的絕對路徑 (已修正為 Linux 格式)
-JSON_KEY_PATH = "/home/lingeiai48/project-c7e1d808-1b27-4629-b29-682ac8b02c24.json"
-
-# 【防呆機制】檢查金鑰檔案是否存在
-if not os.path.exists(JSON_KEY_PATH):
-    print(f"🚨 嚴重錯誤：找不到金鑰檔案！請確認檔案是否上傳至 {JSON_KEY_PATH}")
-    sys.exit(1)
-
-# 自動讀取 Project ID
-try:
-    with open(JSON_KEY_PATH, 'r', encoding='utf-8') as f:
-        key_data = json.load(f)
-        PROJECT_ID = key_data.get("project_id")
-except Exception as e:
-    print(f"🚨 讀取金鑰發生錯誤: {e}")
-    sys.exit(1)
-
-# 設定環境變數供 SDK 自動讀取驗證
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = JSON_KEY_PATH
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1474664376186179706/MtIa8U1EJS6tBydicPkLEiPgJa53PzBJ-PVeUvEkWDKheAuS0fKyFp_blzSR6dM524Ls")
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-c7e1d808-1b27-4629-b29")
 
 # 初始化 Google Gen AI 用戶端 (指定使用 Vertex AI 模式)
+# GitHub Actions 中應該透過 Workload Identity Federation 或設定 GOOGLE_APPLICATION_CREDENTIALS 的 secret
 client = genai.Client(
     vertexai=True,
     project=PROJECT_ID,
-    location="global",  # 依照 MIKE 設定改為 global 測試連線
-    http_options={'timeout': 15.0}  # 加上超時機制，避免因為連線或模型當機導致程式無限掛起
+    location="global",
+    http_options={'timeout': 15.0}
 )
 
 # ==========================================
@@ -105,7 +88,6 @@ def ask_gemini_analysis(fund_data, jpy_rate):
         try:
             print(f"📡 嘗試啟動 {display_name} 核心引擎...")
 
-            # 使用最新 SDK 的生成方式，並加入 Google 搜尋工具
             response = client.models.generate_content(
                 model=model_id,
                 contents=prompt,
@@ -129,13 +111,13 @@ def ask_gemini_analysis(fund_data, jpy_rate):
                 print(f"❌ 呼叫 {model_id} 時發生非預期錯誤: {error_str[:120]}...")
             continue
 
-    return "❌ 呼叫所有頂級模型皆失敗。請確認專案金鑰是否正確，或是否已在 GCP 啟用 Vertex AI。"
+    return "❌ 呼叫所有頂級模型皆失敗。請確認 GitHub Actions 的 GCP 驗證是否設定正確。"
 
 # ==========================================
-# 📢 Discord 發送模組 (支援長文分段推播)
+#  Discord 發送模組
 # ==========================================
 def send_to_discord(content):
-    full_msg = f"🚀 **Gemini 旗艦分析日報** ({datetime.datetime.now().strftime('%Y-%m-%d')})\n\n" + content
+    full_msg = f"🚀 **投資行情日報** ({datetime.datetime.now().strftime('%Y-%m-%d')})\n\n" + content
     
     chunk_size = 1500
     chunks = [full_msg[i:i + chunk_size] for i in range(0, len(full_msg), chunk_size)]
@@ -153,18 +135,18 @@ def send_to_discord(content):
             time.sleep(1)  # 等待 1 秒避免 Discord API 限制
 
 # ==========================================
-# 🕷️ 第一銀行爬蟲函數 (Linux VM 專用參數)
+# 🕷️ 第一銀行爬蟲函數 (GitHub Actions / Ubuntu 專用)
 # ==========================================
 def get_linux_driver():
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new") # 更現代的 Headless 模式
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("window-size=1920,1080")
     # 模擬正常的瀏覽器，避免被銀行擋下
     options.add_argument("user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    return webdriver.Chrome(options=options)
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 def get_firstbank_jpy_rate():
     print("-" * 50)
@@ -205,7 +187,7 @@ def get_firstbank_nav(fund_url, fund_name):
 # 🎯 主程式
 # ==========================================
 def main():
-    print(f"📊 Linux VM 專用 - MIKE 旗艦分析版 | " + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print(f"📊 GitHub Actions 自動化分析版 | " + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     # 1. 抓取數據
     jpy_rate = get_firstbank_jpy_rate()
